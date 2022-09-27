@@ -1,5 +1,6 @@
 module JSONToXML
 
-# Write your package code here.
+include("types.jl")
+include("constants.jl")
 
 end
