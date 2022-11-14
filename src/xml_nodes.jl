@@ -1,38 +1,36 @@
-"""
-Node Types: XML Specific
----
-
-1. Node: Abstract type
-2. RootNode: Dummy Root Node
-3. ElementNode: Tags
-4. TextNode: Text
-5. XMLDocument <: AbstractSyntaxTree
-"""
-
-const NodeType::DataType = Symbol
-const EMPTY_NODE::NodeType = :EMPTY_NODE
-
-abstract type Node end
-
-struct RootNode <: Node end
-
-@kwdef mutable struct ElementNode <: Node
-    name::NodeType = EMPTY_NODE
+@kwdef mutable struct Node
+    name::Symbol = Symbol()
     attributes::Dict{Symbol, String} = Dict{Symbol, String}()
     children::Vector{Node} = Node[]
+    text::Union{Nothing, String} = nothing
 
-    ElementNode(name::NodeType, attributes::Dict{Symbol, String}, children::Vector{Node}) = new(name, attributes, children)
-end
-
-@kwdef struct TextNode <: Node
-    text::String = ""
-    name::NodeType = EMPTY_NODE
-
-    TextNode(text::String, name::NodeType) = new(text, name)
+    Node(name::Symbol, attributes::Dict{Symbol, String}, children::Vector{Node}, string::Union{Nothing, String}) = new(name, attributes, children, string)
 end
 
 @kwdef struct XMLDocument <: AbstractSyntaxTree
-    root::Node = RootNode()
+    root::Node = Node()
+    textnodes::Set{Symbol} = Set{Symbol}([])
+    elemnodes::Set{Symbol} = Set{Symbol}([])
+    size::Int = 0
 
-    XMLDocument(root::Node) = new(root)
+    XMLDocument(root::Node, textnodes::Set{Symbol}, elemnodes::Set{Symbol}, size::Int) = new(root, textnodes, elemnodes, size)
+    function XMLDocument(root::Node)
+        size, textnodes, elemnodes = _xml(root, 1, Set{Symbol}([]), Set{Symbol}([root.name]))
+        new(root, textnodes, elemnodes, size)
+    end
+end
+
+
+function _xml(node::Node, size::Int=0, textnodes=Set{Symbol}([]), elemnodes=Set{Symbol}([]))
+    for child in node.children
+        if isnothing(child.text)
+            s, t, e = _xml(child, length(child.children), textnodes, push!(elemnodes, child.name))
+            union!(elemnodes, e)
+            union!(textnodes, t)
+            size += s
+        else
+            push!(textnodes, child.name)
+        end
+    end
+    return size, textnodes, elemnodes
 end

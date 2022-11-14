@@ -18,42 +18,41 @@ NxM DataFrame
 """
 function xml_to_dataframe(xml::XMLDocument)::DataFrame
     root = xml.root
-    publications = vcat([getproperty(bib, :children) for bib in getproperty(root, :children)]...)
-
-
+    schema = DataFrame[]
+    table_data = get_table_data(root)
+    
     return DataFrame()
 end
 
 
-TABLE_DATA = Dict()
 
 
-function get_table_data(root::ElementNode, table=Dict())
-    next_level = Dict()
-    for (k, v) in getproperty(root, :attributes)
-        if haskey(table, k)
-            push!(table[k],  v)
-        else
-            table[k] = [v]
-        end
-    end
-
+function get_table_data(root::Node, level::Int=0, row_id::Int=0)
+    schema = Dict{Symbol, Any}(
+        :name => root.name,
+        :id => row_id,
+        :depth => level,
+        :colnames => Set{Symbol}([]),
+        :tblnames => Set{Symbol}([]),
+        :tables => Dict{Symbol, Any}(),
+        :columns => [(; id=row_id, column=key, val=value) for (key, value) in getproperty(root, :attributes)],
+    )
+    row_id = 1
     for child in getproperty(root, :children)
-        rname = root.name # Symbol(string(replace(string(root.name), "-" => "_"), "_", i))
-        cname = child.name # Symbol(string(replace(string(child.name), "-" => "_"), "_", i))
-        if typeof(child) == TextNode
-            if haskey(table, cname)
-                push!(table[cname], child.text)
-            else
-                table[cname] =  [child.text]
-            end
+        # Found a terminal cell value
+        if !isnothing(child.text)
+            push!(schema[:colnames], child.name)
+            push!(schema[:columns], (; id=row_id, column=child.name, val=child.text))
         else
-            if haskey(next_level, rname)
-                push!(next_level[rname], get_table_data(child, table))
+            # This is a new table
+            push!(schema[:tblnames], child.name)
+            if haskey(schema[:tables], child.name)
+                push!(schema[:tables][child.name], get_table_data(child, level+1, row_id))
             else
-                next_level[rname] = [get_table_data(child, table)]
+                push!(schema[:tables], child.name => [get_table_data(child, level+1, row_id)])
             end
         end
+        row_id += 1
     end
-    return table, next_level
+    return schema
 end
